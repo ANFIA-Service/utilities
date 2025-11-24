@@ -125,6 +125,9 @@ def verify_df_pairs_polars(
     model_col="MODELLO",
     json_path="/home/python_script/day-by-day/template_make_model.json",
 ):
+    """
+    Funzione per correggere automaticamente gli errori noti nel database e scoprire nuovi errori.
+    """
     template_dict = load_dict_from_json(json_path)
     if not template_dict:
         print("Json non corretto. Revisionare gli errori.")
@@ -142,10 +145,10 @@ def verify_df_pairs_polars(
         ("DS", "ND"): ("DS", "DS7"),
     }
 
-    # Aggiungi una colonna con il numero di riga (opzionale, solo per la stampa)
+    # Aggiungi una colonna con il numero di riga
     df = df.with_columns(pl.int_range(0, df.height).alias("row_nr"))
 
-    # Crea un DataFrame Polars con le correzioni, usando i nomi delle colonne corrette
+    # Crea un DataFrame Polars con le correzioni
     corrections_df = pl.DataFrame(
         {
             make_col: [k[0] for k in corrections.keys()],
