@@ -120,10 +120,10 @@ def verify_df_pairs(
 
 
 def verify_df_pairs_polars(
-    df: pl.DataFrame,
-    make_col: str = "MARCA",
-    model_col: str = "MODELLO",
-    json_path: str = "/home/python_script/day-by-day/template_make_model.json",
+    df,
+    make_col="MARCA",
+    model_col="MODELLO",
+    json_path="/home/python_script/day-by-day/template_make_model.json",
 ):
     template_dict = load_dict_from_json(json_path)
     if not template_dict:
