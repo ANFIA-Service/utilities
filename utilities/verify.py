@@ -1,5 +1,6 @@
 import json
 import pandas as pd
+import polars as pl
 
 
 def load_dict_from_json(json_path):
@@ -116,3 +117,97 @@ def verify_df_pairs(
         return df
     else:
         return None
+
+
+def verify_df_pairs_polars(
+    df: pl.DataFrame,
+    make_col: str = "MARCA",
+    model_col: str = "MODELLO",
+    json_path: str = "/home/python_script/day-by-day/template_make_model.json",
+):
+    template_dict = load_dict_from_json(json_path)
+    if not template_dict:
+        print("Json non corretto. Revisionare gli errori.")
+        return None
+
+    corrections = {
+        ("PEUGEOT", "JUMPER"): ("PEUGEOT", "BOXER"),
+        ("CITROEN", "BOXER"): ("CITROEN", "JUMPER"),
+        ("CITROEN", "DOBLÒ"): ("CITROEN", "JUMPER"),
+        ("RENAULT", "SPRINTER"): ("RENAULT", "MASTER"),
+        ("FIAT", "BERLINGO"): ("FIAT", "DOBLÒ"),
+        ("FORD", "TRANSPORTER"): ("VOLKSWAGEN", "TRANSPORTER"),
+        ("CITROEN", "DUCATO"): ("FIAT", "DUCATO"),
+        ("CITROEN", "RIFTER"): ("CITROEN", "BERLINGO"),
+        ("DS", "ND"): ("DS", "DS7"),
+    }
+
+    corrections_df = pl.DataFrame(
+        {
+            "make": [k[0] for k in corrections.keys()],
+            "model": [k[1] for k in corrections.keys()],
+            "corrected_make": [v[0] for v in corrections.values()],
+            "corrected_model": [v[1] for v in corrections.values()],
+        }
+    )
+
+    df_with_corrections = df.join(
+        corrections_df,
+        on=[make_col, model_col],
+        how="left",
+    )
+
+    df = df.with_columns(
+        pl.when(pl.col("corrected_make").is_not_null())
+        .then(pl.col("corrected_make"))
+        .otherwise(pl.col(make_col))
+        .alias(make_col),
+        pl.when(pl.col("corrected_model").is_not_null())
+        .then(pl.col("corrected_model"))
+        .otherwise(pl.col(model_col))
+        .alias(model_col),
+    )
+
+    corrected_mask = pl.col("corrected_make").is_not_null()
+    corrected_pairs = (
+        df_with_corrections.filter(corrected_mask)
+        .select(
+            pl.all().exclude("corrected_make", "corrected_model"),
+            pl.col("corrected_make"),
+            pl.col("corrected_model"),
+        )
+        .to_dicts()
+    )
+
+    incorrect_mask = (~pl.col(make_col).is_in(list(template_dict.keys()))) | (
+        ~pl.col(model_col).is_in(
+            [m for sublist in template_dict.values() for m in sublist]
+        )
+    )
+    incorrect_pairs = (
+        df.filter(incorrect_mask)
+        .select(pl.all().exclude("corrected_make", "corrected_model"))
+        .to_dicts()
+    )
+
+    if corrected_pairs:
+        print("Correzioni applicate:")
+        for row in corrected_pairs:
+            print(
+                f"Riga {row['row_nr']}: '{row[make_col]} {row[model_col]}' → '{row['corrected_make']} {row['corrected_model']}'"
+            )
+
+    declared_pairs = set()
+    if incorrect_pairs:
+        for row in incorrect_pairs:
+            pair = (row[make_col], row[model_col])
+            if pair not in declared_pairs:
+                print(
+                    f"Marca '{pair[0]}' - Modello '{pair[1]}' non è corretto."
+                )
+                declared_pairs.add(pair)
+        print(declared_pairs)
+    else:
+        print("Tutte le coppie Marca-Modello sono corrette.")
+
+    return df
