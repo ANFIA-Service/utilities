@@ -142,22 +142,28 @@ def verify_df_pairs_polars(
         ("DS", "ND"): ("DS", "DS7"),
     }
 
+    # Aggiungi una colonna con il numero di riga (opzionale, solo per la stampa)
+    df = df.with_columns(pl.int_range(0, df.height).alias("row_nr"))
+
+    # Crea un DataFrame Polars con le correzioni, usando i nomi delle colonne corrette
     corrections_df = pl.DataFrame(
         {
-            "make": [k[0] for k in corrections.keys()],
-            "model": [k[1] for k in corrections.keys()],
+            make_col: [k[0] for k in corrections.keys()],
+            model_col: [k[1] for k in corrections.keys()],
             "corrected_make": [v[0] for v in corrections.values()],
             "corrected_model": [v[1] for v in corrections.values()],
         }
     )
 
+    # Unisci il DataFrame originale con le correzioni
     df_with_corrections = df.join(
         corrections_df,
         on=[make_col, model_col],
         how="left",
     )
 
-    df = df.with_columns(
+    # Applica le correzioni dove necessario
+    df = df_with_corrections.with_columns(
         pl.when(pl.col("corrected_make").is_not_null())
         .then(pl.col("corrected_make"))
         .otherwise(pl.col(make_col))
@@ -166,19 +172,23 @@ def verify_df_pairs_polars(
         .then(pl.col("corrected_model"))
         .otherwise(pl.col(model_col))
         .alias(model_col),
-    )
+    ).drop(["corrected_make", "corrected_model"])
 
+    # Filtra le righe corrette
     corrected_mask = pl.col("corrected_make").is_not_null()
     corrected_pairs = (
         df_with_corrections.filter(corrected_mask)
         .select(
-            pl.all().exclude("corrected_make", "corrected_model"),
+            pl.col("row_nr"),
+            pl.col(make_col).alias("old_make"),
+            pl.col(model_col).alias("old_model"),
             pl.col("corrected_make"),
             pl.col("corrected_model"),
         )
         .to_dicts()
     )
 
+    # Trova le coppie non corrette (non nel dizionario)
     incorrect_mask = (~pl.col(make_col).is_in(list(template_dict.keys()))) | (
         ~pl.col(model_col).is_in(
             [m for sublist in template_dict.values() for m in sublist]
@@ -186,17 +196,23 @@ def verify_df_pairs_polars(
     )
     incorrect_pairs = (
         df.filter(incorrect_mask)
-        .select(pl.all().exclude("corrected_make", "corrected_model"))
+        .select(
+            pl.col("row_nr"),
+            pl.col(make_col),
+            pl.col(model_col),
+        )
         .to_dicts()
     )
 
+    # Stampa le correzioni applicate
     if corrected_pairs:
         print("Correzioni applicate:")
         for row in corrected_pairs:
             print(
-                f"Riga {row['row_nr']}: '{row[make_col]} {row[model_col]}' → '{row['corrected_make']} {row['corrected_model']}'"
+                f"Riga {row['row_nr']}: '{row['old_make']} {row['old_model']}' → '{row['corrected_make']} {row['corrected_model']}'"
             )
 
+    # Stampa le coppie non corrette
     declared_pairs = set()
     if incorrect_pairs:
         for row in incorrect_pairs:
