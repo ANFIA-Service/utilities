@@ -43,9 +43,9 @@ def verify_df_pairs(
         Returns the corrected dataframe that will then be converted into csv.
 
     """
-    df = df.drop(
-        columns=["data_immatricolazione_del_veicolo", "data_omologazione"]
-    )
+    # df = df.drop(
+    #     columns=["data_immatricolazione_del_veicolo", "data_omologazione"]
+    # )
     user_input = ""
     while user_input.casefold() != "skip":
         template_dict = load_dict_from_json(json_path)
