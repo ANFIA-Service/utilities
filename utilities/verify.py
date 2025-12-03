@@ -44,9 +44,12 @@ def verify_df_pairs(
         Returns the corrected dataframe that will then be converted into csv.
 
     """
-    df = df.drop(
-        columns=["data_immatricolazione_del_veicolo", "data_omologazione"]
-    )
+    try:
+        df = df.drop(
+            columns=["data_immatricolazione_del_veicolo", "data_omologazione"]
+        )
+    except Exception as e:
+        print(e)
     user_input = ""
     while user_input.casefold() != "skip":
         template_dict = load_dict_from_json(json_path)
@@ -229,7 +232,14 @@ def verify_df_pairs_polars(
     else:
         print("Tutte le coppie Marca-Modello sono corrette.")
 
-    df = df.drop(
-        ["data_immatricolazione_del_veicolo", "data_omologazione", "row_nr"]
-    )
+    try:
+        df = df.drop(
+            [
+                "data_immatricolazione_del_veicolo",
+                "data_omologazione",
+                "row_nr",
+            ]
+        )
+    except Exception as e:
+        print(e)
     return df
